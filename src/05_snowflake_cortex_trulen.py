@@ -13,7 +13,6 @@
 # - Following this [website](https://quickstarts.snowflake.com/guide/getting_started_with_llmops_using_snowflake_cortex_and_trulens/index.html#1) for environment set up
 
 # Once we have an environment with the right packages installed, we can load our credentials and set our Snowflake connection in a jupyter notebook notebook.
-
 # %%
 from dotenv import load_dotenv
 from snowflake.snowpark import Session
@@ -23,8 +22,11 @@ from glob import glob
 from snowflake.connector import connect
 from snowflake.cortex import Complete
 
-# Load environment variables from the .env file
-load_dotenv()
+load_dotenv(dotenv_path=".env")
+
+# Load connection parameters from environment variables
+import os
+from snowflake.connector import connect
 
 # Load connection parameters from environment variables
 connection_params = {
@@ -36,6 +38,12 @@ connection_params = {
     "schema": os.getenv("SNOWFLAKE_SCHEMA")
 }
 
+# Ensure all required environment variables are set
+for key, value in connection_params.items():
+    if not value:
+        raise ValueError(f"Environment variable '{key}' is not set.")
+
+# %%
 # Fetch the Cortex Search Service name
 cortex_search_service_name = os.getenv("SNOWFLAKE_CORTEX_SEARCH_SERVICE")
 
@@ -202,22 +210,18 @@ class CortexSearchRetriever:
 # Once the retriever is created, we can test it out. Now that we have grounded access to the Streamlit docs, we can ask questions about using Streamlit, like "How do I launch a streamlit app".
 
 # %%
+## RAG example
+        
+from snowflake.cortex import Complete
+query="who is ceo of microsoft?"
 retriever = CortexSearchRetriever(snowpark_session, limit_to_retrieve=4)
 
-retrieved_context = retriever.retrieve(query="who is ceo of tesla?")
+retrieved_context = retriever.retrieve(query=query)
+context = "\n".join(chunk for chunk in retrieved_context)
+prompt = f"Context: {context}\n\nQuestion: {query}\n\nAnswer:"
+print(f"Prompt:\n{prompt}")
 
-retrieved_context
-
-# %%
-retriever = CortexSearchRetriever(snowpark_session, limit_to_retrieve=4)
-
-retrieved_context = retriever.retrieve(query="How do I launch a streamlit app?")
-
-print(len(retrieved_context))
-
-
-# %%
-retriever.retrieve(query="who is ceo of tesla?")
+print(Complete("mistral-large", prompt))
 
 # %% [markdown]
 # ## Create a RAG with built-in observability
@@ -279,8 +283,6 @@ class RAG_from_scratch:
 
 rag = RAG_from_scratch()
 
-# %%
-# rag.query("what is risk of investing tesla?")
 
 # %% [markdown]
 # After constructing the RAG, we can set up the feedback functions we want to use to evaluate the RAG.
@@ -293,12 +295,17 @@ rag = RAG_from_scratch()
 
 # %%
 from trulens.providers.cortex.provider import Cortex
+# from trulens.providers import Cortex
+# from trulens_core import Cortex
+# from trulens_connectors_snowflake import Cortex
+
+
 from trulens.core import Feedback
 from trulens.core import Select
 import numpy as np
 
 # provider = Cortex(snowpark_session.connection, "llama3.1-8b")
-provider = Cortex(snowpark_session, "llama3.1-8b")
+provider = Cortex(snowpark_session, "mistral-large")
 
 
 f_groundedness = (
@@ -447,21 +454,16 @@ tru_filtered_rag = TruCustomApp(
 )
 
 # %% [markdown]
-# Then we run it on a test set of questions about streamlit to measure its performance.
+# Then we run it on a test set of questions about tesla 10K to measure its performance.
 
 # %%
-# with tru_rag as recording:
-#     for prompt in prompts:
-#         rag.query(prompt)
-
 # Main loop with error handling
-with tru_rag as recording:
+with tru_filtered_rag as recording:
     for prompt in prompts:
         try:
             filtered_rag.query(prompt)
         except Exception as e:
             print(f"Error processing prompt '{prompt}': {e}")
-            # Optionally log the error or take other actions here
 
 # Retrieve the leaderboard even if some queries fail
 try:
@@ -472,7 +474,29 @@ except Exception as e:
 # %%
 tru_session.get_leaderboard()
 
-# %% [markdown]
+# %%
+
+filtered_leaderboard=tru_session.get_leaderboard()
+filtered_leaderboard
+# %%
+import pandas as pd
+
+# Simulate leaderboard data (replace with actual retrievals)
+rag_leaderboard = tru_session.get_leaderboard("RAG")
+filtered_leaderboard = tru_session.get_leaderboard("RAG Filtered")
+
+# Convert to DataFrame for comparison
+df_rag = pd.DataFrame(rag_leaderboard)
+df_filtered = pd.DataFrame(filtered_leaderboard)
+
+# Compute differences
+comparison = pd.concat([df_rag.mean(), df_filtered.mean()], axis=1)
+comparison.columns = ["RAG", "Filtered RAG"]
+
+print("Comparison of Leaderboard Metrics:")
+print(comparison)
+# %%
+
 # ## Conclusion And Resources
 # 
 # Congratulations! You've successfully built a RAG by combining Cortex Search and LLM Functions, adding in TruLens Feedback Functions as Observability. You also set up logging for TruLens to Snowflake, and added TruLens Guardrails to reduce hallucination.

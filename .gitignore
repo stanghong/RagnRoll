@@ -1,0 +1,6 @@
+*.pdf
+hakenv
+hakenv/*
+*.sql
+.DS_Store
+.env

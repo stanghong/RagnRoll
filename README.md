@@ -4,6 +4,8 @@
 
 snowflake RAG n ROLL Hackathon
 
+[![Watch the video](https://img.youtube.com/vi/9I2pp8Z6H3A/hqdefault.jpg)](https://www.youtube.com/watch?v=9I2pp8Z6H3A)
+
 
 ## snowflake_hybrid_python_sql_notebook_app.ipynb 
 ### ETL and Cortex Search
